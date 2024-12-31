@@ -1,16 +1,25 @@
 package com.sales.imagepicker;
 
+import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.Manifest;
-import android.os.Build;
+import android.graphics.Matrix;
 import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+
+import java.io.FileDescriptor;
+import java.io.IOException;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResult;
@@ -33,8 +42,10 @@ public class MainActivity extends AppCompatActivity {
                 public void onActivityResult(ActivityResult result) {
 
                     if (result.getResultCode() == RESULT_OK) {
-                        Uri image_uri = result.getData().getData();
-                        imageView.setImageURI(image_uri);
+                        image_uri = result.getData().getData();
+                        Bitmap input = uriToBitmap(image_uri);
+                        input = rotateBitmap(input);
+                        imageView.setImageBitmap(input);
                     }
                 }
             });
@@ -90,8 +101,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     Uri image_uri;
-
-    //TODO opens camera so that user can capture image
+    
     private void openCamera() {
 
         ContentValues values = new ContentValues();
@@ -103,7 +113,6 @@ public class MainActivity extends AppCompatActivity {
         cameraActivityResultLauncher.launch(cameraIntent);
     }
 
-    //TODO capture the image using camera and display it
     ActivityResultLauncher<Intent> cameraActivityResultLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             new ActivityResultCallback<ActivityResult>() {
@@ -112,9 +121,43 @@ public class MainActivity extends AppCompatActivity {
                 public void onActivityResult(ActivityResult result) {
 
                     if (result.getResultCode() == RESULT_OK) {
-                        imageView.setImageURI(image_uri);
+                        Bitmap input = uriToBitmap(image_uri);
+                        input = rotateBitmap(input);
+                        imageView.setImageBitmap(input);
                     }
                 }
             });
+
+
+    //TODO takes URI of the image and returns bitmap
+    private Bitmap uriToBitmap(Uri selectedFileUri) {
+        try {
+            ParcelFileDescriptor parcelFileDescriptor =
+                    getContentResolver().openFileDescriptor(selectedFileUri, "r");
+            FileDescriptor fileDescriptor = parcelFileDescriptor.getFileDescriptor();
+            Bitmap image = BitmapFactory.decodeFileDescriptor(fileDescriptor);
+            parcelFileDescriptor.close();
+            return image;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return  null;
+    }
+
+    //TODO rotate image if image captured on samsung devices
+    //TODO Most phone cameras are landscape, meaning if you take the photo in portrait, the resulting photos will be rotated 90 degrees.
+    @SuppressLint("Range")
+    public Bitmap rotateBitmap(Bitmap input){
+        String[] orientationColumn = {MediaStore.Images.Media.ORIENTATION};
+        Cursor cur = getContentResolver().query(image_uri, orientationColumn, null, null, null);
+        int orientation = -1;
+        if (cur != null && cur.moveToFirst()) {
+            orientation = cur.getInt(cur.getColumnIndex(orientationColumn[0]));
+        }
+        Log.d("tryOrientation",orientation+"");
+        Matrix rotationMatrix = new Matrix();
+        rotationMatrix.setRotate(orientation);
+        return Bitmap.createBitmap(input,0,0, input.getWidth(), input.getHeight(), rotationMatrix, true);
+    }
 
 }
